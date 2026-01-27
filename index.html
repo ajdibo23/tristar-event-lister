@@ -69,6 +69,8 @@
         const previewPdf = document.getElementById('preview-pdf');
         const pdfSource = document.getElementById('pdf-source');
         const rowsSettings = document.getElementById('rowsSettings');
+        const fileInput = document.getElementById('fileInput');
+        const downloadFileButton = document.getElementById('downloadFileButton');
 
         addRowButton.addEventListener('click', () => {
             data.push({
@@ -206,7 +208,38 @@
         }
         
         generatePreview();
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    data = JSON.parse(e.target.result);
+                    saveLocalStorage();
+                    generatePreview();
+                };
+                reader.readAsText(file);
+                fileInput.value = '';
+            }
+        });
+
+        downloadFileButton.addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const second = String(now.getSeconds()).padStart(2, '0');
+            a.download = `events-data-${year}-${month}-${day}-${hour}-${minute}-${second}.json`;
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+        });
     </script>
 </body>
-
 </html>
