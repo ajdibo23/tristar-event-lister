@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tri-Star Event Handout Maker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Tri-Star Event Handout Maker</h1>
+    <div id="settings">
+        <h2>Settings</h2>
+        <label>Import Configuration: </label><input type="file" id="fileInput" name="fileInput"><br>
+        <button id="downloadFileButton">Export Configuration</button>
+        <br><hr>
+        <div id="settings-content">
+            <label for="event-name">Event Name:</label>
+            <input type="text" id="event-name" name="event-name"><br><br>
+            <label for="event-date">Event Date or Duration:</label>
+            <input type="text" id="event-date" name="event-date" placeholder="e.g. April 10-12, 2026 or March 15 – March 17"><br><br>
+            <label for="event-location">Event Location:</label>
+            <input type="text" id="event-location" name="event-location"><br><br>
+            <label for="event-description">Event Description:</label>
+            <textarea id="event-description" name="event-description"></textarea><br><br>
+            <label for="event-url">Event URL (QR code):</label>
+            <input type="url" id="event-url" name="event-url" placeholder="https://...">
+            <br><br>
+            <button id="addRowButton">Add Item</button>
+        </div>
+    </div>
+    <hr>
+    <div id="rowsSettings" style="display: flex; gap: 10px;"></div>
+    <hr>
+    <h2>Preview (PDF)</h2>
+    <div id="preview" style="border: 1px solid #ccc; min-height: 400px; background: #f5f5f5;">
+        <iframe id="preview-pdf" style="width: 100%; height: 600px; border: none;"></iframe>
+    </div>
+    <div id="pdf-source" style="position: absolute; left: -9999px; top: 0; width: 210mm; background: white; padding: 15px; font-family: Arial, sans-serif;"></div>
+    <script>
+        let data = localStorage.getItem('data');
+        if (data) {
+            data = JSON.parse(data);
+        } else {
+            data = [];
+        }
+
+        // Spacing (px) around the line between PDF event cards. Lower marginTop pulls the line up.
+        const PDF_SEPARATOR = { marginTop: -25, marginBottom: 15 };
+
+        function saveLocalStorage() {
+            localStorage.setItem('data', JSON.stringify(data));
+        }
+
+        const eventName = document.getElementById('event-name');
+        const eventDate = document.getElementById('event-date');
+        const eventLocation = document.getElementById('event-location');
+        const eventDescription = document.getElementById('event-description');
+        const eventUrlInput = document.getElementById('event-url');
+        const addRowButton = document.getElementById('addRowButton');
+        const previewPdf = document.getElementById('preview-pdf');
+        const pdfSource = document.getElementById('pdf-source');
+        const rowsSettings = document.getElementById('rowsSettings');
+
+        addRowButton.addEventListener('click', () => {
+            data.push({
+                eventName: eventName.value,
+                eventDate: eventDate.value,
+                eventLocation: eventLocation.value,
+                eventDescription: eventDescription.value,
+                eventUrl: (eventUrlInput.value || '').trim()
+            });
+            saveLocalStorage();
+            generatePreview();
+
+            eventName.value = '';
+            eventDate.value = '';
+            eventLocation.value = '';
+            eventDescription.value = '';
+            eventUrlInput.value = '';
+        });
+
+        async function generatePreview() {
+            rowsSettings.innerHTML = '';
+            pdfSource.innerHTML = '';
+
+            data.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'event-card';
+                card.style.cssText = 'margin-bottom: 20px; overflow: hidden;';
+                const urlToEncode = (item.eventUrl || '').trim();
+                if (urlToEncode) {
+                    const qrWrap = document.createElement('div');
+                    qrWrap.style.cssText = 'width: 150px; height: 150px; float: left; margin-right: 10px;';
+                    qrWrap.className = 'qr-wrap';
+                    try {
+                        new QRCode(qrWrap, { text: urlToEncode, width: 150, height: 150 });
+                    } catch (e) { /* invalid url */ }
+                    card.appendChild(qrWrap);
+                }
+                const textDiv = document.createElement('div');
+                textDiv.innerHTML = `
+                    <h2 style="font-weight: bold; margin: 0 0 8px 0;">${escapeHtml(item.eventName)}</h2>
+                    <p style="margin: 0 0 8px 0;">${escapeHtml(item.eventDescription)}</p>
+                    <ul style="font-weight: bold; margin-left: ${urlToEncode ? '150px' : '0'}; margin-top: 8px;">
+                        <li>${escapeHtml(item.eventDate)}</li>
+                        <li>${escapeHtml(item.eventLocation)}</li>
+                    </ul>
+                `;
+                card.appendChild(textDiv);
+                pdfSource.appendChild(card);
+                const hr = document.createElement('hr');
+                hr.style.margin = `${PDF_SEPARATOR.marginTop}px 0 ${PDF_SEPARATOR.marginBottom}px`;
+                pdfSource.appendChild(hr);
+
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row-item';
+                const orderBtns = document.createElement('div');
+                orderBtns.className = 'order-btns';
+                const upBtn = document.createElement('button');
+                upBtn.textContent = '<';
+                upBtn.title = 'Move left';
+                upBtn.disabled = index === 0;
+                upBtn.onclick = () => { moveRow(index, -1); };
+                const downBtn = document.createElement('button');
+                downBtn.textContent = '>';
+                downBtn.title = 'Move right';
+                downBtn.disabled = index === data.length - 1;
+                downBtn.onclick = () => { moveRow(index, 1); };
+                orderBtns.appendChild(upBtn);
+                orderBtns.appendChild(downBtn);
+                const title = document.createElement('h2');
+                title.textContent = item.eventName;
+                const delBtn = document.createElement('button');
+                delBtn.textContent = 'Delete';
+                delBtn.onclick = function () { deleteRow(index); };
+                rowDiv.appendChild(orderBtns);
+                rowDiv.appendChild(title);
+                rowDiv.appendChild(delBtn);
+                rowsSettings.appendChild(rowDiv);
+            });
+
+            if (data.length === 0) {
+                previewPdf.src = 'about:blank';
+                return;
+            }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const canvas = await html2canvas(pdfSource, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true
+                });
+                const img = canvas.toDataURL('image/jpeg', 0.92);
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageW = pdf.internal.pageSize.getWidth();
+                const pageH = pdf.internal.pageSize.getHeight();
+                const imgH = (canvas.height * pageW) / canvas.width;
+                let y = 0;
+                pdf.addImage(img, 'JPEG', 0, y, pageW, imgH);
+                let remaining = imgH - pageH;
+                while (remaining > 0) {
+                    pdf.addPage();
+                    y -= pageH;
+                    pdf.addImage(img, 'JPEG', 0, y, pageW, imgH);
+                    remaining -= pageH;
+                }
+                const blob = pdf.output('blob');
+                if (previewPdf.src && previewPdf.src.startsWith('blob:')) URL.revokeObjectURL(previewPdf.src);
+                previewPdf.src = URL.createObjectURL(blob);
+            } catch (e) {
+                console.error('PDF preview failed:', e);
+                previewPdf.srcdoc = '<p style="padding:20px;color:#c00;">Preview failed. Add at least one row and try again.</p>';
+            }
+        }
+
+        function escapeHtml(s) {
+            if (!s) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        function moveRow(index, direction) {
+            const newIdx = index + direction;
+            if (newIdx < 0 || newIdx >= data.length) return;
+            [data[index], data[newIdx]] = [data[newIdx], data[index]];
+            saveLocalStorage();
+            generatePreview();
+        }
+
+        function deleteRow(index) {
+            data.splice(index, 1);
+            saveLocalStorage();
+            generatePreview();
+        }
+        
+        generatePreview();
+    </script>
+</body>
+
+</html>
