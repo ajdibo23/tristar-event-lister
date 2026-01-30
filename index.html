@@ -26,7 +26,7 @@
             <label for="event-name">Event Name:</label>
             <input type="text" id="event-name" name="event-name"><br><br>
             <label for="event-date">Event Date or Duration:</label>
-            <input type="text" id="event-date" name="event-date" placeholder="e.g. April 10-12, 2026 or March 15 – March 17"><br><br>
+            <input type="text" id="event-date" name="event-date" placeholder="e.g. April 10-12, 2026 or March 15 - March 17"><br><br>
             <label for="event-location">Event Location:</label>
             <input type="text" id="event-location" name="event-location"><br><br>
             <label for="event-description">Event Description:</label>
@@ -35,6 +35,7 @@
             <input type="url" id="event-url" name="event-url" placeholder="https://...">
             <br><br>
             <button id="addRowButton">Add Item</button>
+            <button id="cancelEditButton" style="display: none;">Cancel</button>
         </div>
     </div>
     <hr>
@@ -71,26 +72,59 @@
         const rowsSettings = document.getElementById('rowsSettings');
         const fileInput = document.getElementById('fileInput');
         const downloadFileButton = document.getElementById('downloadFileButton');
+        const cancelEditButton = document.getElementById('cancelEditButton');
 
-        addRowButton.addEventListener('click', () => {
-            data.push({
-                eventName: eventName.value,
-                eventDate: eventDate.value,
-                eventLocation: eventLocation.value,
-                eventDescription: eventDescription.value,
-                eventUrl: (eventUrlInput.value || '').trim()
-            });
-            saveLocalStorage();
-            generatePreview();
+        let editingIndex = -1;
 
+        function clearForm() {
             eventName.value = '';
             eventDate.value = '';
             eventLocation.value = '';
             eventDescription.value = '';
             eventUrlInput.value = '';
+            editingIndex = -1;
+            addRowButton.textContent = 'Add Item';
+            cancelEditButton.style.display = 'none';
+        }
+
+        function startEdit(index) {
+            const item = data[index];
+            eventName.value = item.eventName || '';
+            eventDate.value = item.eventDate || '';
+            eventLocation.value = item.eventLocation || '';
+            eventDescription.value = item.eventDescription || '';
+            eventUrlInput.value = item.eventUrl || '';
+            editingIndex = index;
+            addRowButton.textContent = 'Update';
+            cancelEditButton.style.display = 'inline-block';
+        }
+
+        addRowButton.addEventListener('click', () => {
+            const payload = {
+                eventName: eventName.value,
+                eventDate: eventDate.value,
+                eventLocation: eventLocation.value,
+                eventDescription: eventDescription.value,
+                eventUrl: (eventUrlInput.value || '').trim()
+            };
+            if (editingIndex >= 0) {
+                data[editingIndex] = payload;
+            } else {
+                data.push(payload);
+            }
+            saveLocalStorage();
+            generatePreview();
+            clearForm();
+        });
+
+        cancelEditButton.addEventListener('click', () => {
+            clearForm();
         });
 
         async function generatePreview() {
+            if (editingIndex >= data.length) {
+                clearForm();
+            }
             rowsSettings.innerHTML = '';
             pdfSource.innerHTML = '';
 
@@ -141,11 +175,15 @@
                 orderBtns.appendChild(downBtn);
                 const title = document.createElement('h2');
                 title.textContent = item.eventName;
+                const editBtn = document.createElement('button');
+                editBtn.textContent = 'Edit';
+                editBtn.onclick = function () { startEdit(index); };
                 const delBtn = document.createElement('button');
                 delBtn.textContent = 'Delete';
                 delBtn.onclick = function () { deleteRow(index); };
                 rowDiv.appendChild(orderBtns);
                 rowDiv.appendChild(title);
+                rowDiv.appendChild(editBtn);
                 rowDiv.appendChild(delBtn);
                 rowsSettings.appendChild(rowDiv);
             });
@@ -242,4 +280,5 @@
         });
     </script>
 </body>
+
 </html>
