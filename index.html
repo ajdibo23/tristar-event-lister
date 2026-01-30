@@ -142,14 +142,19 @@
                     } catch (e) { /* invalid url */ }
                     card.appendChild(qrWrap);
                 }
+                const dateVal = (item.eventDate || '').trim();
+                const locationVal = (item.eventLocation || '').trim();
+                const listItems = [];
+                if (dateVal) listItems.push(`<li>${escapeHtml(item.eventDate)}</li>`);
+                if (locationVal) listItems.push(`<li>${escapeHtml(item.eventLocation)}</li>`);
+                const listHtml = listItems.length
+                    ? `<ul style="font-weight: bold; margin-left: ${urlToEncode ? '150px' : '0'}; margin-top: 8px;">${listItems.join('')}</ul>`
+                    : '';
                 const textDiv = document.createElement('div');
                 textDiv.innerHTML = `
                     <h2 style="font-weight: bold; margin: 0 0 8px 0;">${escapeHtml(item.eventName)}</h2>
                     <p style="margin: 0 0 8px 0;">${escapeHtml(item.eventDescription)}</p>
-                    <ul style="font-weight: bold; margin-left: ${urlToEncode ? '150px' : '0'}; margin-top: 8px;">
-                        <li>${escapeHtml(item.eventDate)}</li>
-                        <li>${escapeHtml(item.eventLocation)}</li>
-                    </ul>
+                    ${listHtml}
                 `;
                 card.appendChild(textDiv);
                 pdfSource.appendChild(card);
